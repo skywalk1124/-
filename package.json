@@ -6,9 +6,8 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
-    "start": "deno run --allow-net --allow-read --allow-env --allow-sys server-deno.ts",
-    "clean": "rm -rf dist",
-    "deploy": "npm run build && npm start"
+    "start": "deno run --allow-net --allow-read --allow-env --allow-sys main.ts",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
