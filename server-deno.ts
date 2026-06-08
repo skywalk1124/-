@@ -1,9 +1,9 @@
-import express from "npm:express@4.18.2";
-import path from "node:path";
-import fs from "node:fs";
+import { Hono } from "npm:hono";
+import { serveStatic } from "npm:hono/deno";
 import { GoogleGenAI as AntigravityGenAI } from "npm:@google/genai";
 import { GoogleGenerativeAI } from "npm:@google/generative-ai";
 
+// 1. AI & ENV Setup
 const aiApiKey = Deno.env.get("GEMINI_API_KEY");
 const aiAnti = aiApiKey ? new AntigravityGenAI({
   apiKey: aiApiKey,
@@ -47,7 +47,7 @@ async function getAiRecommendation(keyword: string) {
           }
         }
       }
-    } catch (e) { console.warn("AI 1 fallback:", e.message); }
+    } catch (e) { console.warn("AI 1 partial failed:", e.message); }
   }
 
   if (aiLegacy) {
@@ -69,16 +69,17 @@ async function getAiRecommendation(keyword: string) {
   return { song: keyword, artist: "" };
 }
 
-const app = express();
+const app = new Hono();
 
 const BILI_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/110.0',
   'Referer': 'https://www.bilibili.com'
 };
 
-app.get('/api/bilibili-search', async (req, res) => {
-  const keyword = req.query.keyword as string;
-  if (!keyword) return res.status(400).json({ error: 'Keyword required' });
+// 2. API Routes
+app.get('/api/bilibili-search', async (c) => {
+  const keyword = c.req.query('keyword');
+  if (!keyword) return c.json({ error: 'Keyword required' }, 400);
 
   try {
     const aiRecPromise = getAiRecommendation(keyword);
@@ -108,7 +109,9 @@ app.get('/api/bilibili-search', async (req, res) => {
     const JUNK = ['搞笑', '春晚', '鬼畜', '盘点', '绿幕', '翻唱', 'cover', '改编', '教程', '集锦', '合集', '表情包'];
     const isDurationValid = (d: string) => {
       const p = d.split(':').map(Number);
-      let s = p.length === 2 ? p[0] * 60 + p[1] : p[0] * 3600 + p[1] * 60 + p[2];
+      let s = 0;
+      if (p.length === 2) s = p[0] * 60 + p[1];
+      else if (p.length === 3) s = p[0] * 3600 + p[1] * 60 + p[2];
       return s >= 60 && s <= 600;
     };
 
@@ -136,7 +139,7 @@ app.get('/api/bilibili-search', async (req, res) => {
 
     filtered.sort((a, b) => getScore(b.title, b.author, b.play, keyword, aiRec.artist) - getScore(a.title, a.author, a.play, keyword, aiRec.artist));
 
-    res.json({
+    return c.json({
       aiRecommendation: aiRec,
       results: filtered.map(v => ({
         id: v.bvid,
@@ -150,22 +153,15 @@ app.get('/api/bilibili-search', async (req, res) => {
       }))
     });
   } catch (error) {
-    res.status(500).json({ error: 'Search failed' });
+    return c.json({ error: 'Search failed' }, 500);
   }
 });
 
-// Serve Static Files
-const distPath = path.join(Deno.cwd(), "dist");
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  app.get("*", (req, res) => {
-    if (req.path.startsWith('/api')) return;
-    res.sendFile(path.join(distPath, "index.html"));
-  });
-}
+// 3. Static Assets & SPA Fallback
+// In Deno Deploy, we serve from dist folder
+app.use('/*', serveStatic({ root: './dist' }));
+app.get('*', serveStatic({ path: './dist/index.html' }));
 
-const port = Number(Deno.env.get("PORT") || 8000);
-console.log(`Deno server running on port ${port}`);
+Deno.serve(app.fetch);
 
-// Native Deno serve
-Deno.serve({ port }, app);
+export default app;
