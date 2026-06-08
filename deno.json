@@ -1,0 +1,8 @@
+{
+  "tasks": {
+    "start": "deno run --allow-net --allow-read --allow-env --allow-sys server-deno.ts"
+  },
+  "compilerOptions": {
+    "lib": ["deno.window", "dom"]
+  }
+}
