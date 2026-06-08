@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import crypto from 'crypto';
 import { GoogleGenAI as AntigravityGenAI } from "@google/genai";
@@ -88,10 +89,9 @@ async function getOriginalArtist(keyword: string) {
   return { song: keyword, artist: "" };
 }
 
-async function startServer() {
+async function createServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
-
+  
   // Bilibili 通用请求头
   const BILI_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/110.0',
@@ -330,16 +330,35 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
+    // Vercel handles static serving if configured, but we keep this for local/docker
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        if (req.path.startsWith('/api')) return; // Don't catch API routes here
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  return app;
 }
 
-startServer();
+// Support both ESM and CJS for different runtimes
+const appPromise = createServer();
+
+// Vercel standard export
+export default async (req: any, res: any) => {
+  const app = await appPromise;
+  return app(req, res);
+};
+
+// Local development / Docker start
+if (process.env.NODE_ENV !== "production" || process.env.START_SERVER === "true") {
+  const PORT = process.env.PORT || 3000;
+  appPromise.then(app => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  });
+}
