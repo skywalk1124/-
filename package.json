@@ -5,10 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build --config vite.config.ts",
-    "start": "node dist/server.cjs",
-    "start:deno": "deno run --allow-net --allow-read --allow-env --allow-sys --allow-run server-deno.ts",
-    "clean": "rm -rf dist server.cjs",
+    "build": "vite build",
+    "start": "deno run --allow-net --allow-read --allow-env --allow-sys server-deno.ts",
+    "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
